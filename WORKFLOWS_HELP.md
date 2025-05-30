@@ -36,7 +36,7 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
 - **Fallback Actions**: Execute alternative steps if the primary action fails (e.g., using a cached dataset if a live API is down).
 - **Error Notifications**: Alert relevant stakeholders (e.g. via email or Slack) with details of the failure for manual intervention.
 - **Logging Errors**: Record failure details (e.g. error codes, timestamps) for debugging and auditability.
-  These mechanisms ensure workflows can recover from issues or escalate them appropriately, minimizing downtime and manual intervention.
+  These mechanisms ensure workflows can recover from issues or escalate them appropriately, minimising downtime and manual intervention.
 
 ## Components of an Automation Workflow
 
@@ -74,7 +74,7 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
 ```
 
 - **Trigger**: New incoming email starts the workflow.
-- **Parse Email**: Extract content, subject, sender.
+- **Parse Email**: Extract content, subject, and sender.
 - **Condition**: Check if the email is marked as urgent.
 - **Actions**: Send alert for urgent emails or create a ticket otherwise.
 - **Notify**: Inform the support team via Slack.
@@ -88,7 +88,7 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
   - Create user accounts (email, internal systems).
   - Assign access permissions.
   - Schedule orientation meetings.
-  - Send welcome email with resources.
+  - Send a welcome email with resources.
   - Notify IT to prepare hardware.
 - **Outcome**: New employee is fully onboarded without HR manually contacting departments.
 
@@ -100,7 +100,7 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
   - Check inventory.
   - Update order status.
   - Send confirmation email to customer.
-  - Notify warehouse to pack and ship.
+  - Notify the warehouse to pack and ship.
   - Update shipping tracking once shipped.
 - **Outcome**: Faster, reliable order processing with fewer errors.
 
@@ -109,8 +109,8 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
 - **Trigger**: A new data sync request is received from an external system.
 - **Steps**:
   - Attempt to call the target API to fetch data (up to 3 retries, 5-second delay between attempts).
-  - If API call succeeds, process and store data in a database.
-  - If API call fails after retries, use cached data as a fallback and log the error.
+  - If the API call succeeds, process and store data in a database.
+  - If the API call fails after retries, use cached data as a fallback and log the error.
   - If data is critical (e.g. financial data), send an approval request to a manager via email.
   - Wait for manager approval (manual step) before proceeding.
   - Notify the team via Slack with sync status.
@@ -178,7 +178,7 @@ Automation workflows are created and managed with tools like:
 | Scalability  | Handles growing workload without extra staff |
 | Transparency | Logs and audit trails for compliance         |
 | Consistency  | Repeatable and reliable execution            |
-| Cost Savings | Reduces labor and operational costs          |
+| Cost Savings | Reduces labour and operational costs         |
 
 ## GitHub Actions Workflows for RentSync Project
 

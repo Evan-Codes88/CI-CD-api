@@ -1,37 +1,58 @@
+# Workflow name for deploying to AWS Elastic Beanstalk
 name: Deploy to Elastic Beanstalk
 
+# Events that trigger the workflow
 on:
   push:
-    branches: [main]
+    branches: [main] # Trigger on push to main branch
 
+# Defines the jobs to be executed
 jobs:
+  # Job 1: Run the CI workflow (ci.yml) to ensure tests pass before deployment
   test:
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/ci.yml # Reuses the ci.yml workflow for testing
+
+  # Job 2: Deploy the application to Elastic Beanstalk
   deploy:
-    needs: test
-    runs-on: ubuntu-latest
+    needs: test # Ensures this job runs only after the test job succeeds
+    runs-on: ubuntu-latest # Specifies the runner environment (Ubuntu latest version)
     steps:
+      # Step 1: Check out the repository code
       - uses: actions/checkout@v4
+        # Uses GitHub's checkout action to clone the repository
+
+      # Step 2: Set up Node.js environment
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "18" # Specifies Node.js version 18 for compatibility with RentSync
+
+      # Step 3: Install project dependencies
       - name: Install dependencies
         run: npm install
+        # Runs npm install to fetch dependencies listed in package.json
+
+      # Step 4: Create deployment package
       - name: Create deployment package
         run: zip -r application.zip src index.js package.json package-lock.json .ebextensions
+        # Creates a zip archive (application.zip) including source code, entry point, dependencies, and Elastic Beanstalk configuration
+
+      # Step 5: Debug AWS CLI setup
       - name: Debug AWS setup
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS access key from GitHub Secrets
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # AWS secret key from GitHub Secrets
         run: |
           aws --version
-          aws s3 ls s3://elasticbeanstalk-ap-southeast-2-591408364730/ --region ap-southeast-2
+          aws s3 ls s3://elasticbeanstalk-ap-southeast-2-591organization364730/ --region ap-southeast-2
           aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env
+        # Verifies AWS CLI version, lists S3 bucket contents, and checks Elastic Beanstalk environment status to ensure connectivity
+
+      # Step 6: Deploy to Elastic Beanstalk
       - name: Deploy to Elastic Beanstalk
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS access key for S3 and Elastic Beanstalk authentication
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # AWS secret key for S3 and Elastic Beanstalk authentication
         run: |
           aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/application-${{ github.sha }}.zip --region ap-southeast-2
           aws elasticbeanstalk create-application-version \
@@ -43,3 +64,6 @@ jobs:
             --region ap-southeast-2 \
             --environment-name devapi-env \
             --version-label ${{ github.sha }}
+        # Uploads application.zip to S3 with a commit-specific filename
+        # Creates a new application version in Elastic Beanstalk using the uploaded zip
+        # Updates the devapi-env environment to deploy the new version
