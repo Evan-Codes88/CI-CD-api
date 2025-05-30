@@ -16,8 +16,45 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "18"
-      - run: npm install
-      - run: npm test
+      - name: Install dependencies
+        run: npm install
+      - name: Run tests and generate JSON output
+        run: npm test -- --json > test-results.json
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      - name: Create custom test log
+        run: |
+          node -e "
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+            const log = [
+              'Test Summary - ' + new Date().toISOString(),
+              'Total Tests: ' + results.numTotalTests,
+              'Passed: ' + results.numPassedTests,
+              'Failed: ' + results.numFailedTests,
+              'Pending: ' + results.numPendingTests,
+              results.testResults.map((suite, i) => (
+                'Suite ' + (i + 1) + ': ' + suite.testFilePath + '\n' +
+                suite.testResults.map(test => (
+                  '- ' + test.title + ': ' + test.status +
+                  (test.status === 'failed' ? '\n  Error: ' + (test.failureMessages.join('\n  ') || 'No error message') : '')
+                )).join('\n')
+              )).join('\n\n'),
+            ].join('\n');
+            fs.writeFileSync('test-results-custom.log', log);
+          "
+      - name: Upload test log to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 cp test-results-custom.log s3://elasticbeanstalk-ap-southeast-2-591408364730/test-logs/test-results-${{ github.sha }}.log --region ap-southeast-2
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            test-results.json
+            test-results-custom.log
