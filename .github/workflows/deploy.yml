@@ -27,5 +27,5 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/
-          aws elasticbeanstalk create-application-version --application-name "DEV API" --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application.zip
-          aws elasticbeanstalk update-environment --environment-name DEVAPI-env --version-label ${{ github.sha }}
+          aws elasticbeanstalk create-application-version --region ap-southeast-2 --application-name "DEV API" --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application.zip
+          aws elasticbeanstalk update-environment --region ap-southeast-2 --environment-name DEVAPI-env --version-label ${{ github.sha }}
