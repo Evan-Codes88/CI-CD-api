@@ -2,14 +2,14 @@
 
 ## What Is an Automation Workflow?
 
-An automation workflow is a predefined sequence of automated actions and decisions designed to streamline, optimize, and execute tasks or processes with minimal human intervention. It functions like a digital assembly line, where input data or events trigger a series of steps, leading to efficient and reliable outcomes.
+An automation workflow is a predefined sequence of automated actions and decisions designed to streamline, optimise, and execute tasks or processes with minimal human intervention. It functions like a digital assembly line, where input data or events trigger a series of steps, leading to efficient and reliable outcomes.
 
 ## Purpose of Automation Workflows
 
 Automation workflows aim to:
 
 - **Save time and reduce manual effort**: Automate repetitive tasks to free up human resources.
-- **Improve accuracy and consistency**: Standardize processes to eliminate human errors.
+- **Improve accuracy and consistency**: Standardise processes to eliminate human errors.
 - **Increase efficiency and productivity**: Enable faster processing and higher volume handling.
 - **Ensure compliance and auditability**: Log and monitor steps for regulatory or quality control.
 - **Enhance scalability**: Support process growth without proportional resource increases.
@@ -20,22 +20,22 @@ Automation workflows aim to:
 An automation workflow typically includes:
 
 - **Triggering Mechanism**: Event or condition that initiates the workflow (e.g., new email, file upload, scheduled time).
-- **Conditional Logic / Decision Points**: Branches for different paths based on data or outcomes (e.g., if-else, switch cases).
+- **Conditional Logic / Decision Points**: Branches for different paths based on data or outcomes (e.g. if-else, switch cases).
 - **Actions**: Automated tasks like sending emails, updating databases, running scripts, or calling APIs.
-- **Loops / Iterations**: Repeat actions over lists or until conditions are met (e.g., retrying a failed API call).
+- **Loops / Iterations**: Repeat actions over lists or until conditions are met (e.g. retrying a failed API call).
 - **Data Handling**: Pass, transform, or store data between steps.
 - **Error Handling**: Detect and manage failures or exceptions, including retry logic and fallback actions.
-- **Notifications and Approvals**: Alert humans or require manual sign-off (e.g., approval before deployment).
+- **Notifications and Approvals**: Alert humans or require manual sign-off (e.g. approval before deployment).
 - **Logging and Reporting**: Record events and outcomes for traceability.
 
 ### Error Handling in Detail
 
 Error handling ensures workflows remain robust by managing failures gracefully. Common strategies include:
 
-- **Retry Logic**: Automatically retry a failed action (e.g., API call) a set number of times before escalating. For example, retrying a database connection up to three times with a delay between attempts.
+- **Retry Logic**: Automatically retry a failed action a set number of times before escalating. For example, retrying a database connection up to three times with a delay between attempts.
 - **Fallback Actions**: Execute alternative steps if the primary action fails (e.g., using a cached dataset if a live API is down).
-- **Error Notifications**: Alert relevant stakeholders (e.g., via email or Slack) with details of the failure for manual intervention.
-- **Logging Errors**: Record failure details (e.g., error codes, timestamps) for debugging and auditability.
+- **Error Notifications**: Alert relevant stakeholders (e.g. via email or Slack) with details of the failure for manual intervention.
+- **Logging Errors**: Record failure details (e.g. error codes, timestamps) for debugging and auditability.
   These mechanisms ensure workflows can recover from issues or escalate them appropriately, minimizing downtime and manual intervention.
 
 ## Components of an Automation Workflow
@@ -111,7 +111,7 @@ Error handling ensures workflows remain robust by managing failures gracefully. 
   - Attempt to call the target API to fetch data (up to 3 retries, 5-second delay between attempts).
   - If API call succeeds, process and store data in a database.
   - If API call fails after retries, use cached data as a fallback and log the error.
-  - If data is critical (e.g., financial data), send an approval request to a manager via email.
+  - If data is critical (e.g. financial data), send an approval request to a manager via email.
   - Wait for manager approval (manual step) before proceeding.
   - Notify the team via Slack with sync status.
 - **Outcome**: Ensures reliable data syncing with robust error handling and human oversight for critical operations.
