@@ -36,5 +36,7 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
+console.log("Deploy test")
+
 // Export app for tests
 export default app;
