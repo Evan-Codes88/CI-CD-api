@@ -1,0 +1,29 @@
+name: Deploy to Elastic Beanstalk
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+      - run: npm install
+      - name: Deploy to Elastic Beanstalk
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          npm run build
+          zip -r application.zip .
+          aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/
+          aws elasticbeanstalk create-application-version --application-name "DEV API" --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application.zip
+          aws elasticbeanstalk update-environment --environment-name DEVAPI-env --version-label ${{ github.sha }}
