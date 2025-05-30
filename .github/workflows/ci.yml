@@ -3,13 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
   pull_request:
     branches: [main]
-
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+  schedule:
+    - cron: "0 14 * * *" # Daily at midnight AEST (UTC+10)
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    if: github.repository != 'Evan-Codes88/CI-CD-api' || !github.event.repository.archived # Condition to skip if repo is archived
     steps:
       - uses: actions/checkout@v3
       - name: Use Node.js
@@ -55,6 +66,13 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp test-results-custom.log s3://elasticbeanstalk-ap-southeast-2-591408364730/test-logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to S3"
+      - name: Upload test log to Elastic Beanstalk logs
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 cp test-results-custom.log s3://elasticbeanstalk-ap-southeast-2-591408364730/DEV-API/DEVAPI-env/logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to Elastic Beanstalk logs"
       - name: Archive test results
         if: always()
         uses: actions/upload-artifact@v4
