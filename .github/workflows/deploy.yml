@@ -26,6 +26,6 @@ jobs:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
-          aws s3 cp application.zip s3://elasticbeanstalk-us-east-1-<your-account-id>/
-          aws elasticbeanstalk create-application-version --application-name RentSync --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-us-east-1-<your-account-id>,S3Key=application.zip
-          aws elasticbeanstalk update-environment --environment-name RentSync-env --version-label ${{ github.sha }}
+          aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/
+          aws elasticbeanstalk create-application-version --application-name "DEV API" --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application.zip
+          aws elasticbeanstalk update-environment --environment-name DEVAPI-env --version-label ${{ github.sha }}
