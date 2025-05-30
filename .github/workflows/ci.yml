@@ -16,11 +16,12 @@ on:
       - "package.json"
       - "package-lock.json"
   schedule:
-    - cron: "0 14 * * *" # Daily at midnight AEST (UTC+10)
+    - cron: "0 0 * * *" # Daily at midnight UTC
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    if: github.repository != 'Evan-Codes88/CI-CD-api' || !github.event.repository.archived # Condition to skip if repo is archived
+    if: github.repository != 'Evan-Codes88/CI-CD-api' || !github.event.repository.archived
     steps:
       - uses: actions/checkout@v3
       - name: Use Node.js
@@ -34,11 +35,12 @@ jobs:
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      - name: Create custom test log
+      - name: Create custom test log and export data
         run: |
           node -e "
             const fs = require('fs');
             let log = ['Test Summary - ' + new Date().toISOString()];
+            let summary = { timestamp: new Date().toISOString(), tests: {} };
             try {
               const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
               log.push(
@@ -54,10 +56,18 @@ jobs:
                   )).join('\n') || 'No test results')
                 )).join('\n\n') || 'No test suites'
               );
+              summary.tests = {
+                total: results.numTotalTests || 0,
+                passed: results.numPassedTests || 0,
+                failed: results.numFailedTests || 0,
+                pending: results.numPendingTests || 0
+              };
             } catch (e) {
               log.push('Error parsing test-results.json: ' + e.message);
+              summary.error = e.message;
             }
             fs.writeFileSync('test-results-custom.log', log.join('\n'));
+            fs.writeFileSync('test-summary.json', JSON.stringify(summary, null, 2));
           "
       - name: Upload test log to S3
         if: always()
@@ -81,3 +91,4 @@ jobs:
           path: |
             test-results.json
             test-results-custom.log
+            test-summary.json
