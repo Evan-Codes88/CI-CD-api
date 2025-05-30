@@ -267,7 +267,7 @@ graph TD
     C --> D[Install Dependencies]
     D --> E[Run Jest Tests]
     E -->|Tests Pass| F[Create Logs & Summary]
-    E -->|Tests Fail| G[Retry Tests (Up to 2)]
+    E -->|Tests Fail| G[Retry Tests - Up to 2]
     G -->|Success| F
     G -->|Failure| H[Notify Team via Slack]
     F --> I[Upload Logs to S3]
@@ -283,7 +283,7 @@ graph TD
     Q -->|Denied/Timeout| S[Notify Team via Slack]
     R --> T[Deploy to Elastic Beanstalk]
     T -->|Success| U[Notify Team via Slack]
-    T -->|Failure| V[Retry Deploy (Up to 2)]
+    T -->|Failure| V[Retry Deploy - Up to 2]
     V -->|Success| U
     V -->|Failure| W[Notify Team via Slack]
 ```
