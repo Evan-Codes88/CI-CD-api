@@ -14,7 +14,10 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-connectDB();
+// Only connect to MongoDB if NOT in test environment
+if (process.env.NODE_ENV !== 'test') {
+  connectDB();
+}
 
 // Middleware
 app.use(cors());
@@ -24,9 +27,14 @@ app.use(cookieParser());
 app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/inspections', inspectionRoutes);
-app.use('api/ratings', ratingRoutes);
+app.use('/api/ratings', ratingRoutes);
 
-// Start server
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// Only start server if NOT in test environment
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
+
+// Export app for tests
+export default app;
