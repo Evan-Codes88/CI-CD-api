@@ -19,20 +19,27 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Create deployment package
-        run: zip -r application.zip src index.js package.json package-lock.json .ebextensions || echo "Failed to create zip"
+        run: zip -r application.zip src index.js package.json package-lock.json .ebextensions
       - name: Debug AWS setup
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws --version
-          aws s3 ls s3://elasticbeanstalk-ap-southeast-2-591408364730/ --region ap-southeast-2 || echo "Failed to list S3 bucket"
-          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names DEVAPI-env || echo "Failed to describe DEVAPI-env"
+          aws s3 ls s3://elasticbeanstalk-ap-southeast-2-591408364730/ --region ap-southeast-2
+          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env
       - name: Deploy to Elastic Beanstalk
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/application-${{ github.sha }}.zip --region ap-southeast-2 || echo "Failed to upload to S3"
-          aws elasticbeanstalk create-application-version --region ap-southeast-2 --application-name "DEV API" --version-label ${{ github.sha }} --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application-${{ github.sha }}.zip || echo "Failed to create application version"
-          aws elasticbeanstalk update-environment --region ap-southeast-2 --environment-name DEVAPI-env --version-label ${{ github.sha }} || echo "Failed to update environment"
+          aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/application-${{ github.sha }}.zip --region ap-southeast-2
+          aws elasticbeanstalk create-application-version \
+            --region ap-southeast-2 \
+            --application-name "DEV API" \
+            --version-label ${{ github.sha }} \
+            --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application-${{ github.sha }}.zip
+          aws elasticbeanstalk update-environment \
+            --region ap-southeast-2 \
+            --environment-name devapi-env \
+            --version-label ${{ github.sha }}
