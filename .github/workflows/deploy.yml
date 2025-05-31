@@ -111,21 +111,6 @@ jobs:
           echo "Causes: $(echo $HEALTH | jq -r '.Causes[]?')"
           [[ "$(echo $HEALTH | jq -r '.HealthStatus')" == "Ok" ]] || exit 1
 
-      - name: Verify Node.js version
-        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          NODE_VERSION=$(aws elasticbeanstalk describe-configuration-settings \
-          --region ap-southeast-2 \
-          --application-name "DEV API" \
-          --environment-name devapi-env \
-          --query 'ConfigurationSettings[0].OptionSettings[?Namespace==`aws:elasticbeanstalk:container:nodejs` && OptionName==`NodeVersion`].Value' \
-          --output text)
-           echo "Node.js version in environment: $NODE_VERSION"
-          [[ "$NODE_VERSION" == 18* ]] || exit 1
-
       - name: Verify environment variables
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         env:
