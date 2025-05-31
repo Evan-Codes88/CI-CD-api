@@ -3,162 +3,156 @@ name: Deploy to Elastic Beanstalk
 
 # Events that trigger the workflow
 on:
-  # Trigger on push to the main branch
   push:
     branches: [main]
-  # Trigger daily at 14:00 UTC (midnight AEST, UTC+10)
   schedule:
-    - cron: "0 14 * * *"
+    - cron: "0 14 * * *" # Midnight AEST (14:00 UTC)
+  workflow_dispatch: # Allow manual triggering
 
-# Defines the jobs to be executed
 jobs:
-  # Job 1: Run the CI workflow (ci.yml) to ensure tests pass before deployment
   test:
     uses: ./.github/workflows/ci.yml
 
-  # Job 2: Deploy the application to Elastic Beanstalk
   deploy:
-    # Ensure this job runs only after the test job succeeds
     needs: test
-    # Use the latest Ubuntu runner for compatibility
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Check for new commits (for schedule trigger)
       - name: Check for new commits
-        # Run only if triggered by schedule to avoid redundant deployments
         if: github.event_name == 'schedule'
-        # Assign an ID to reference the output in subsequent steps
         id: check-changes
         env:
-          # AWS credentials for S3 access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # GitHub token for API access
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Fetch the latest commit SHA from the main branch using GitHub API
           LATEST_COMMIT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
           echo "Latest commit: $LATEST_COMMIT"
-          # Download the last deployed commit SHA from S3, if it exists
           aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt last-deployed-commit.txt --region ap-southeast-2 || echo "No previous deploy commit found"
           if [ -f last-deployed-commit.txt ]; then
             LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt)
             echo "Last deployed commit: $LAST_DEPLOYED_COMMIT"
           else
-            # Set to empty if no previous deploy exists (e.g., first deployment)
             LAST_DEPLOYED_COMMIT=""
           fi
-          # Compare commits and set output for subsequent steps
           if [ "$LATEST_COMMIT" != "$LAST_DEPLOYED_COMMIT" ]; then
             echo "has-changes=true" >> $GITHUB_OUTPUT
           else
             echo "has-changes=false" >> $GITHUB_OUTPUT
           fi
 
-      # Step 2: Check out the repository code
       - uses: actions/checkout@v4
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
-        # Clones the repository to access source code for deployment
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
 
-      # Step 3: Set up Node.js environment
       - name: Use Node.js
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
-        # Use the setup-node action to configure Node.js
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         uses: actions/setup-node@v4
         with:
-          # Specify Node.js version 18 for compatibility with the application
-          node-version: "18"
+          node-version: "18.20.4"
 
-      # Step 4: Install project dependencies
       - name: Install dependencies
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
-        # Run npm install to fetch dependencies from package.json
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         run: npm install || echo "Install dependencies failed, but continuing"
-        # Continue on failure to ensure subsequent steps execute
 
-      # Step 5: Create deployment package
       - name: Create deployment package
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
-        # Create a zip archive including source code, entry point, dependencies, and EB config
-        run: zip -r application.zip src index.js package.json package-lock.json .ebextensions || echo "Create deployment package failed, but continuing"
-        # Continue on failure to ensure subsequent steps execute
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        run: |
+          zip -r application.zip src index.js package.json package-lock.json utils .ebextensions || echo "Create deployment package failed, but continuing"
+          unzip -l application.zip | grep utils/connectDB.js || { echo "utils/connectDB.js missing in application.zip"; exit 1; }
 
-      # Step 6: Debug AWS setup
       - name: Debug AWS setup
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         env:
-          # AWS credentials for S3 and Elastic Beanstalk access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Verify AWS CLI version
-          aws --version || echo "AWS CLI not found"
-          # List S3 bucket contents to ensure connectivity
+          aws --version
           aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/ --region ap-southeast-2 || echo "Failed to list S3 bucket"
-          # Check Elastic Beanstalk environment status
           aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env || echo "Failed to describe Elastic Beanstalk environment"
 
-      # Step 7: Deploy to Elastic Beanstalk
       - name: Deploy to Elastic Beanstalk
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         env:
-          # AWS credentials for S3 and Elastic Beanstalk access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Upload the deployment package to S3 with a commit-specific filename
           aws s3 cp application.zip s3://${{ secrets.S3_BUCKET_NAME }}/application-${{ github.sha }}.zip --region ap-southeast-2 || echo "Failed to upload application.zip to S3"
-          # Create a new application version in Elastic Beanstalk
           aws elasticbeanstalk create-application-version \
             --region ap-southeast-2 \
             --application-name "DEV API" \
             --version-label ${{ github.sha }} \
             --source-bundle S3Bucket=${{ secrets.S3_BUCKET_NAME }},S3Key=application-${{ github.sha }}.zip || echo "Failed to create application version"
-          # Update the Elastic Beanstalk environment to deploy the new version
           aws elasticbeanstalk update-environment \
             --region ap-southeast-2 \
             --environment-name devapi-env \
             --version-label ${{ github.sha }} || echo "Failed to update Elastic Beanstalk environment"
 
-      # Step 8: Verify environment health
       - name: Verify environment health
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         env:
-          # AWS credentials for Elastic Beanstalk access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Wait briefly for the environment to stabilize
-          sleep 30
-          # Check environment health
-          HEALTH=$(aws elasticbeanstalk describe-environments \
+          sleep 60
+          HEALTH=$(aws elasticbeanstalk describe-environment-health \
             --region ap-southeast-2 \
-            --environment-names devapi-env \
-            --query 'Environments[0].Health' --output text)
-          echo "Environment health: $HEALTH"
-          if [ "$HEALTH" != "Green" ]; then
-            echo "Environment is not healthy ($HEALTH). Check logs for details."
+            --environment-name devapi-env \
+            --attribute-names HealthStatus Causes --output json)
+          HEALTH_STATUS=$(echo $HEALTH | jq -r '.HealthStatus')
+          CAUSES=$(echo $HEALTH | jq -r '.Causes[]')
+          echo "Environment health: $HEALTH_STATUS"
+          echo "Causes: $CAUSES"
+          if [ "$HEALTH_STATUS" != "Ok" ]; then
+            echo "Environment is not healthy ($HEALTH_STATUS). Causes: $CAUSES"
             exit 1
           fi
 
-      # Step 9: Save last deployed commit SHA
-      - name: Save last deployed commit SHA
-        # Run always, but only for push or if new commits are detected
-        if: always() && (github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true')
+      - name: Verify Node.js version
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         env:
-          # AWS credentials for S3 access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Save the current commit SHA to a file
+          NODE_VERSION=$(aws elasticbeanstalk describe-configuration-settings \
+            --region ap-southeast-2 \
+            --application-name "DEV API" \
+            --environment-name devapi-env \
+            --query 'ConfigurationSettings[0].OptionSettings[?OptionName==`NodeVersion`].Value' --output text)
+          echo "Node.js version in environment: $NODE_VERSION"
+          if [[ "$NODE_VERSION" != "18"* ]]; then
+            echo "Node.js version mismatch. Expected 18.x, got $NODE_VERSION"
+            exit 1
+          fi
+
+      - name: Retrieve logs on failure
+        if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws elasticbeanstalk request-environment-info \
+            --region ap-southeast-2 \
+            --environment-name devapi-env \
+            --info-type tail
+          sleep 10
+          aws elasticbeanstalk retrieve-environment-info \
+            --region ap-southeast-2 \
+            --environment-name devapi-env \
+            --info-type tail --query 'EnvironmentInfo[].Message' --output text || echo "Failed to retrieve logs"
+
+      - name: Save last deployed commit SHA
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
           echo "${{ github.sha }}" > last-deployed-commit.txt
-          # Upload the commit SHA to S3 for use in future commit comparisons
           aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to save last deployed commit SHA"
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: "deployments"
+          text: "Deployment to devapi-env failed (Health: ${{ steps.verify-health.outputs.health-status }}). Commit: ${{ github.sha }}"
