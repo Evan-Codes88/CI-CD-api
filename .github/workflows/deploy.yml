@@ -28,11 +28,7 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
           aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt last-deployed-commit.txt --region ap-southeast-2 || echo "No previous deploy commit found"
           LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt 2>/dev/null || echo "")
-          if [ "$LATEST_COMMIT" != "$LAST_DEPLOYED_COMMIT" ]; then
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-changes=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "has-changes=$( [ \"$LATEST_COMMIT\" != \"$LAST_DEPLOYED_COMMIT\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
@@ -56,8 +52,14 @@ jobs:
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         run: |
           zip -r application.zip index.js package.json package-lock.json utils routes middleware .ebextensions || echo "Zipping failed"
-          unzip -l application.zip | grep utils/connectDB.js || { echo "Missing: utils/connectDB.js"; exit 1; }
-          unzip -l application.zip | grep .ebextensions/node-version.config || { echo "Missing: .ebextensions/node-version.config"; exit 1; }
+          if ! unzip -l application.zip | grep utils/connectDB.js; then
+            echo "Missing: utils/connectDB.js"
+            exit 1
+          fi
+          if ! unzip -l application.zip | grep .ebextensions/node-version.config; then
+            echo "Missing: .ebextensions/node-version.config"
+            exit 1
+          fi
 
       - name: Debug AWS setup
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
