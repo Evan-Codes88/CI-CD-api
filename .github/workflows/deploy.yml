@@ -1,13 +1,12 @@
 # Workflow name for deploying to AWS Elastic Beanstalk
 name: Deploy to Elastic Beanstalk
 
-# Events that trigger the workflow
 on:
   push:
     branches: [main]
   schedule:
     - cron: "0 14 * * *" # Midnight AEST (14:00 UTC)
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
   test:
@@ -54,11 +53,17 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         run: npm install || echo "Install dependencies failed, but continuing"
 
+      - name: Validate package.json
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        run: |
+          jq -e '.type == "module"' package.json || { echo "package.json missing 'type': 'module'"; exit 1; }
+
       - name: Create deployment package
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
         run: |
           zip -r application.zip src index.js package.json package-lock.json utils .ebextensions || echo "Create deployment package failed, but continuing"
           unzip -l application.zip | grep utils/connectDB.js || { echo "utils/connectDB.js missing in application.zip"; exit 1; }
+          unzip -l application.zip | grep .ebextensions/node-version.config || { echo ".ebextensions/node-version.config missing in application.zip"; exit 1; }
 
       - name: Debug AWS setup
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
@@ -94,7 +99,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          sleep 60
+          sleep 120
           HEALTH=$(aws elasticbeanstalk describe-environment-health \
             --region ap-southeast-2 \
             --environment-name devapi-env \
@@ -126,6 +131,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify environment variables
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          ENV_VARS=$(aws elasticbeanstalk describe-configuration-settings \
+            --region ap-southeast-2 \
+            --application-name "DEV API" \
+            --environment-name devapi-env \
+            --query 'ConfigurationSettings[0].OptionSettings[?Namespace==`aws:elasticbeanstalk:application:environment`]')
+          echo "$ENV_VARS" | jq -e '.[] | select(.OptionName=="MONGODB_URI")' || { echo "MONGODB_URI not set in environment"; exit 1; }
+
       - name: Retrieve logs on failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
         env:
@@ -140,7 +158,12 @@ jobs:
           aws elasticbeanstalk retrieve-environment-info \
             --region ap-southeast-2 \
             --environment-name devapi-env \
-            --info-type tail --query 'EnvironmentInfo[].Message' --output text || echo "Failed to retrieve logs"
+            --info-type tail --query 'EnvironmentInfo[].Message' --output text > eb-logs.txt || echo "Failed to retrieve tail logs"
+          aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/DEV-API/DEVAPI-env/logs/eb-activity.log eb-activity.log --region ap-southeast-2 || echo "Failed to retrieve eb-activity.log"
+          echo "Tail logs:"
+          cat eb-logs.txt
+          echo "eb-activity.log:"
+          cat eb-activity.log
 
       - name: Save last deployed commit SHA
         if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
