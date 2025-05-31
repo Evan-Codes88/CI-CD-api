@@ -1,0 +1,36 @@
+# Node modules (will be installed on the server)
+node_modules/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git metadata
+.git/
+.gitignore
+
+# Local environment config
+.env
+
+# Editor configs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Tests and docs
+tests/
+docs/
+
+# Build outputs (if you do local builds and deploy only build artifacts)
+dist/
+build/
+
+# Misc temp files
+*.tmp
+*.swp
