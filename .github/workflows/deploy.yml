@@ -46,12 +46,14 @@ jobs:
 
       - name: Validate package.json
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
-        run: jq -e '.type == "module"' package.json || { echo "'type': 'module' missing in package.json"; exit 1; }
+        run: |
+          jq -e '.type == "module"' package.json || { echo "'type': 'module' missing in package.json"; exit 1; }
 
       - name: Create deployment package (includes middleware)
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         run: |
-          zip -r application.zip index.js package.json package-lock.json utils routes middleware .ebextensions || echo "Zipping failed"
+          set -e
+          zip -r application.zip index.js package.json package-lock.json utils routes middleware .ebextensions
           if ! unzip -l application.zip | grep -q "utils/connectDB.js"; then
             echo "Missing: utils/connectDB.js"
             exit 1
