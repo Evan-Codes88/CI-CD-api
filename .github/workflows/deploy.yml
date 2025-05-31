@@ -127,7 +127,29 @@ jobs:
             --environment-name devapi-env \
             --version-label ${{ github.sha }} || echo "Failed to update Elastic Beanstalk environment"
 
-      # Step 8: Save last deployed commit SHA
+      # Step 8: Verify environment health
+      - name: Verify environment health
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
+        env:
+          # AWS credentials for Elastic Beanstalk access
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          # Wait briefly for the environment to stabilize
+          sleep 30
+          # Check environment health
+          HEALTH=$(aws elasticbeanstalk describe-environments \
+            --region ap-southeast-2 \
+            --environment-names devapi-env \
+            --query 'Environments[0].Health' --output text)
+          echo "Environment health: $HEALTH"
+          if [ "$HEALTH" != "Green" ]; then
+            echo "Environment is not healthy ($HEALTH). Check logs for details."
+            exit 1
+          fi
+
+      # Step 9: Save last deployed commit SHA
       - name: Save last deployed commit SHA
         # Run always, but only for push or if new commits are detected
         if: always() && (github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true')
