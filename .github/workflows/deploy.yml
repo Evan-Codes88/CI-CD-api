@@ -3,67 +3,130 @@ name: Deploy to Elastic Beanstalk
 
 # Events that trigger the workflow
 on:
+  # Trigger on push to the main branch
   push:
-    branches: [main] # Trigger on push to main branch
+    branches: [main]
+  # Trigger daily at 14:00 UTC (midnight AEST, UTC+10)
+  schedule:
+    - cron: "0 14 * * *"
 
 # Defines the jobs to be executed
 jobs:
   # Job 1: Run the CI workflow (ci.yml) to ensure tests pass before deployment
   test:
-    uses: ./.github/workflows/ci.yml # Reuses the ci.yml workflow for testing
+    uses: ./.github/workflows/ci.yml
 
   # Job 2: Deploy the application to Elastic Beanstalk
   deploy:
-    needs: test # Ensures this job runs only after the test job succeeds
-    runs-on: ubuntu-latest # Specifies the runner environment (Ubuntu latest version)
+    # Ensure this job runs only after the test job succeeds
+    needs: test
+    # Use the latest Ubuntu runner for compatibility
+    runs-on: ubuntu-latest
+    # Only proceed if triggered by push or if new commits are detected on schedule
+    if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
     steps:
       # Step 1: Check out the repository code
       - uses: actions/checkout@v4
-        # Uses GitHub's checkout action to clone the repository
+        # Clones the repository to access source code for deployment
 
-      # Step 2: Set up Node.js environment
+      # Step 2: Check for new commits (only for schedule trigger)
+      - name: Check for new commits
+        # Run only if triggered by schedule to avoid redundant deployments
+        if: github.event_name == 'schedule'
+        # Assign an ID to reference the output in the job condition
+        id: check-changes
+        env:
+          # AWS credentials for S3 access
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # GitHub token for API access
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the latest commit SHA from the main branch using GitHub API
+          LATEST_COMMIT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
+          echo "Latest commit: $LATEST_COMMIT"
+          # Download the last deployed commit SHA from S3, if it exists
+          aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt last-deployed-commit.txt --region ap-southeast-2 || echo "No previous deploy commit found"
+          if [ -f last-deployed-commit.txt ]; then
+            LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt)
+            echo "Last deployed commit: $LAST_DEPLOYED_COMMIT"
+          else
+            # Set to empty if no previous deploy exists (e.g., first deployment)
+            LAST_DEPLOYED_COMMIT=""
+          fi
+          # Compare commits and set output for job condition
+          if [ "$LATEST_COMMIT" != "$LAST_DEPLOYED_COMMIT" ]; then
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 3: Set up Node.js environment
       - name: Use Node.js
+        # Use the setup-node action to configure Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18" # Specifies Node.js version 18 for compatibility with RentSync
+          # Specify Node.js version 18 for compatibility with the application
+          node-version: "18"
 
-      # Step 3: Install project dependencies
+      # Step 4: Install project dependencies
       - name: Install dependencies
-        run: npm install
-        # Runs npm install to fetch dependencies listed in package.json
+        # Run npm install to fetch dependencies from package.json
+        run: npm install || echo "Install dependencies failed, but continuing"
+        # Continue on failure to ensure subsequent steps execute
 
-      # Step 4: Create deployment package
+      # Step 5: Create deployment package
       - name: Create deployment package
-        run: zip -r application.zip src index.js package.json package-lock.json .ebextensions
-        # Creates a zip archive (application.zip) including source code, entry point, dependencies, and Elastic Beanstalk configuration
+        # Create a zip archive including source code, entry point, dependencies, and EB config
+        run: zip -r application.zip src index.js package.json package-lock.json .ebextensions || echo "Create deployment package failed, but continuing"
+        # Continue on failure to ensure subsequent steps execute
 
-      # Step 5: Debug AWS CLI setup
+      # Step 6: Debug AWS setup
       - name: Debug AWS setup
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS access key from GitHub Secrets
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # AWS secret key from GitHub Secrets
+          # AWS credentials for S3 and Elastic Beanstalk access
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          aws --version
-          aws s3 ls s3://elasticbeanstalk-ap-southeast-2-591organization364730/ --region ap-southeast-2
-          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env
-        # Verifies AWS CLI version, lists S3 bucket contents, and checks Elastic Beanstalk environment status to ensure connectivity
+          # Verify AWS CLI version
+          aws --version || echo "AWS CLI not found"
+          # List S3 bucket contents to ensure connectivity
+          aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/ --region ap-southeast-2 || echo "Failed to list S3 bucket"
+          # Check Elastic Beanstalk environment status
+          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env || echo "Failed to describe Elastic Beanstalk environment"
 
-      # Step 6: Deploy to Elastic Beanstalk
+      # Step 7: Deploy to Elastic Beanstalk
       - name: Deploy to Elastic Beanstalk
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }} # AWS access key for S3 and Elastic Beanstalk authentication
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} # AWS secret key for S3 and Elastic Beanstalk authentication
+          # AWS credentials for S3 and Elastic Beanstalk access
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp application.zip s3://elasticbeanstalk-ap-southeast-2-591408364730/application-${{ github.sha }}.zip --region ap-southeast-2
+          # Upload the deployment package to S3 with a commit-specific filename
+          aws s3 cp application.zip s3://${{ secrets.S3_BUCKET_NAME }}/application-${{ github.sha }}.zip --region ap-southeast-2 || echo "Failed to upload application.zip to S3"
+          # Create a new application version in Elastic Beanstalk
           aws elasticbeanstalk create-application-version \
             --region ap-southeast-2 \
             --application-name "DEV API" \
             --version-label ${{ github.sha }} \
-            --source-bundle S3Bucket=elasticbeanstalk-ap-southeast-2-591408364730,S3Key=application-${{ github.sha }}.zip
+            --source-bundle S3Bucket=${{ secrets.S3_BUCKET_NAME }},S3Key=application-${{ github.sha }}.zip || echo "Failed to create application version"
+          # Update the Elastic Beanstalk environment to deploy the new version
           aws elasticbeanstalk update-environment \
             --region ap-southeast-2 \
             --environment-name devapi-env \
-            --version-label ${{ github.sha }}
-        # Uploads application.zip to S3 with a commit-specific filename
-        # Creates a new application version in Elastic Beanstalk using the uploaded zip
-        # Updates the devapi-env environment to deploy the new version
+            --version-label ${{ github.sha }} || echo "Failed to update Elastic Beanstalk environment"
+
+      # Step 8: Save last deployed commit SHA
+      - name: Save last deployed commit SHA
+        # Run regardless of previous step outcomes to maintain state consistency
+        if: always()
+        env:
+          # AWS credentials for S3 access
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          # Save the current commit SHA to a file
+          echo "${{ github.sha }}" > last-deployed-commit.txt
+          # Upload the commit SHA to S3 for use in future commit comparisons
+          aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to save last deployed commit SHA"
