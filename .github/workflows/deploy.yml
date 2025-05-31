@@ -89,6 +89,7 @@ jobs:
 
       - name: Verify environment health
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        id: verify-health
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -102,6 +103,7 @@ jobs:
           CAUSES=$(echo $HEALTH | jq -r '.Causes[]')
           echo "Environment health: $HEALTH_STATUS"
           echo "Causes: $CAUSES"
+          echo "health-status=$HEALTH_STATUS" >> $GITHUB_OUTPUT
           if [ "$HEALTH_STATUS" != "Ok" ]; then
             echo "Environment is not healthy ($HEALTH_STATUS). Causes: $CAUSES"
             exit 1
@@ -148,11 +150,3 @@ jobs:
         run: |
           echo "${{ github.sha }}" > last-deployed-commit.txt
           aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to save last deployed commit SHA"
-
-      - name: Notify Slack on failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: "deployments"
-          text: "Deployment to devapi-env failed (Health: ${{ steps.verify-health.outputs.health-status }}). Commit: ${{ github.sha }}"
