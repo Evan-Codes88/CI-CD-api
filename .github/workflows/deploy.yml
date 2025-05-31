@@ -129,10 +129,8 @@ jobs:
 
       # Step 8: Save last deployed commit SHA
       - name: Save last deployed commit SHA
-        # Only run for push or if new commits are detected
-        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
-        # Run regardless of previous step outcomes to maintain state consistency
-        if: always()
+        # Run always, but only for push or if new commits are detected
+        if: always() && (github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true')
         env:
           # AWS credentials for S3 access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
