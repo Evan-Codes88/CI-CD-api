@@ -9,6 +9,8 @@ on:
   # Trigger on pull requests targeting the main branch
   pull_request:
     branches: [main]
+  # Enable this workflow to be called by other workflows (e.g., deploy.yml)
+  workflow_call:
 
 # Defines the jobs to be executed
 jobs:
