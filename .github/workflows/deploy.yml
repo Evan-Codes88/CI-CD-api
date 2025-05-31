@@ -52,11 +52,11 @@ jobs:
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         run: |
           zip -r application.zip index.js package.json package-lock.json utils routes middleware .ebextensions || echo "Zipping failed"
-          if ! unzip -l application.zip | grep utils/connectDB.js; then
+          if ! unzip -l application.zip | grep -q "utils/connectDB.js"; then
             echo "Missing: utils/connectDB.js"
             exit 1
           fi
-          if ! unzip -l application.zip | grep .ebextensions/node-version.config; then
+          if ! unzip -l application.zip | grep -q ".ebextensions/node-version.config"; then
             echo "Missing: .ebextensions/node-version.config"
             exit 1
           fi
