@@ -28,7 +28,8 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
           aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt last-deployed-commit.txt --region ap-southeast-2 || echo "No previous deploy commit found"
           LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt 2>/dev/null || echo "")
-          echo "has-changes=$([[ $LATEST_COMMIT != $LAST_DEPLOYED_COMMIT ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "has-changes=$( [ \"$LATEST_COMMIT\" != \"$LAST_DEPLOYED_COMMIT\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
 
       - name: Checkout repository
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
