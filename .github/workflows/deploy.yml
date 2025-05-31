@@ -1,13 +1,11 @@
-# Workflow name for deploying to AWS Elastic Beanstalk
 name: Deploy to Elastic Beanstalk
 
-# Events that trigger the workflow
 on:
   push:
     branches: [main]
   schedule:
     - cron: "0 14 * * *" # Midnight AEST (14:00 UTC)
-  workflow_dispatch: # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
   test:
@@ -16,8 +14,9 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+
     steps:
-      - name: Check for new commits
+      - name: Check for new commits (Scheduled Only)
         if: github.event_name == 'schedule'
         id: check-changes
         env:
@@ -27,74 +26,64 @@ jobs:
         run: |
           LATEST_COMMIT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
-          echo "Latest commit: $LATEST_COMMIT"
           aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt last-deployed-commit.txt --region ap-southeast-2 || echo "No previous deploy commit found"
-          if [ -f last-deployed-commit.txt ]; then
-            LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt)
-            echo "Last deployed commit: $LAST_DEPLOYED_COMMIT"
-          else
-            LAST_DEPLOYED_COMMIT=""
-          fi
-          if [ "$LATEST_COMMIT" != "$LAST_DEPLOYED_COMMIT" ]; then
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-          fi
+          LAST_DEPLOYED_COMMIT=$(cat last-deployed-commit.txt 2>/dev/null || echo "")
+          echo "has-changes=$([[ $LATEST_COMMIT != $LAST_DEPLOYED_COMMIT ]] && echo true || echo false)" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v4
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+      - name: Checkout repository
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
+        uses: actions/checkout@v4
 
-      - name: Use Node.js
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+      - name: Setup Node.js
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "18.20.4"
 
       - name: Install dependencies
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
-        run: npm install || echo "Install dependencies failed, but continuing"
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
+        run: npm install || echo "Install failed, continuing"
 
       - name: Validate package.json
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
-        run: |
-          jq -e '.type == "module"' package.json || { echo "package.json missing 'type': 'module'"; exit 1; }
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
+        run: jq -e '.type == "module"' package.json || { echo "'type': 'module' missing in package.json"; exit 1; }
 
-      - name: Create deployment package
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+      - name: Create deployment package (includes middleware)
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         run: |
-          zip -r application.zip index.js package.json package-lock.json utils routes .ebextensions || echo "Create deployment package failed, but continuing"
-          unzip -l application.zip | grep utils/connectDB.js || { echo "utils/connectDB.js missing in application.zip"; exit 1; }
-          unzip -l application.zip | grep .ebextensions/node-version.config || { echo ".ebextensions/node-version.config missing in application.zip"; exit 1; }
+          zip -r application.zip index.js package.json package-lock.json utils routes middleware .ebextensions || echo "Zipping failed"
+          unzip -l application.zip | grep utils/connectDB.js || { echo "Missing: utils/connectDB.js"; exit 1; }
+          unzip -l application.zip | grep .ebextensions/node-version.config || { echo "Missing: .ebextensions/node-version.config"; exit 1; }
 
       - name: Debug AWS setup
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws --version
-          aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/ --region ap-southeast-2 || echo "Failed to list S3 bucket"
-          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env || echo "Failed to describe Elastic Beanstalk environment"
+          aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/ --region ap-southeast-2 || echo "S3 list failed"
+          aws elasticbeanstalk describe-environments --region ap-southeast-2 --environment-names devapi-env || echo "Describe environments failed"
 
-      - name: Deploy to Elastic Beanstalk
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+      - name: Upload and Deploy to Elastic Beanstalk
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp application.zip s3://${{ secrets.S3_BUCKET_NAME }}/application-${{ github.sha }}.zip --region ap-southeast-2 || echo "Failed to upload application.zip to S3"
+          aws s3 cp application.zip s3://${{ secrets.S3_BUCKET_NAME }}/application-${{ github.sha }}.zip --region ap-southeast-2
           aws elasticbeanstalk create-application-version \
             --region ap-southeast-2 \
             --application-name "DEV API" \
             --version-label ${{ github.sha }} \
-            --source-bundle S3Bucket=${{ secrets.S3_BUCKET_NAME }},S3Key=application-${{ github.sha }}.zip || echo "Failed to create application version"
+            --source-bundle S3Bucket=${{ secrets.S3_BUCKET_NAME }},S3Key=application-${{ github.sha }}.zip
           aws elasticbeanstalk update-environment \
             --region ap-southeast-2 \
             --environment-name devapi-env \
-            --version-label ${{ github.sha }} || echo "Failed to update Elastic Beanstalk environment"
+            --version-label ${{ github.sha }}
 
       - name: Verify environment health
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         id: verify-health
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -104,19 +93,13 @@ jobs:
           HEALTH=$(aws elasticbeanstalk describe-environment-health \
             --region ap-southeast-2 \
             --environment-name devapi-env \
-            --attribute-names HealthStatus Causes --output json)
-          HEALTH_STATUS=$(echo $HEALTH | jq -r '.HealthStatus')
-          CAUSES=$(echo $HEALTH | jq -r '.Causes[]')
-          echo "Environment health: $HEALTH_STATUS"
-          echo "Causes: $CAUSES"
-          echo "health-status=$HEALTH_STATUS" >> $GITHUB_OUTPUT
-          if [ "$HEALTH_STATUS" != "Ok" ]; then
-            echo "Environment is not healthy ($HEALTH_STATUS). Causes: $CAUSES"
-            exit 1
-          fi
+            --attribute-names HealthStatus Causes)
+          echo "Environment health: $(echo $HEALTH | jq -r '.HealthStatus')"
+          echo "Causes: $(echo $HEALTH | jq -r '.Causes[]?')"
+          [[ "$(echo $HEALTH | jq -r '.HealthStatus')" == "Ok" ]] || exit 1
 
       - name: Verify Node.js version
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -127,27 +110,24 @@ jobs:
             --environment-name devapi-env \
             --query 'ConfigurationSettings[0].OptionSettings[?OptionName==`NodeVersion`].Value' --output text)
           echo "Node.js version in environment: $NODE_VERSION"
-          if [[ "$NODE_VERSION" != "18"* ]]; then
-            echo "Node.js version mismatch. Expected 18.x, got $NODE_VERSION"
-            exit 1
-          fi
+          [[ "$NODE_VERSION" == 18* ]] || exit 1
 
       - name: Verify environment variables
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true'
+        if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          ENV_VARS=$(aws elasticbeanstalk describe-configuration-settings \
+          VARS=$(aws elasticbeanstalk describe-configuration-settings \
             --region ap-southeast-2 \
             --application-name "DEV API" \
             --environment-name devapi-env \
             --query 'ConfigurationSettings[0].OptionSettings[?Namespace==`aws:elasticbeanstalk:application:environment`]')
-          echo "$ENV_VARS" | jq -e '.[] | select(.OptionName=="MONGODB_URI")' || { echo "MONGODB_URI not set in environment"; exit 1; }
-          echo "$ENV_VARS" | jq -e '.[] | select(.OptionName=="NODE_ENV")' || { echo "NODE_ENV not set in environment"; exit 1; }
+          echo "$VARS" | jq -e '.[] | select(.OptionName=="MONGODB_URI")' || exit 1
+          echo "$VARS" | jq -e '.[] | select(.OptionName=="NODE_ENV")' || exit 1
 
       - name: Retrieve logs on failure
-        if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
+        if: failure() && (github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true')
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -157,23 +137,17 @@ jobs:
             --environment-name devapi-env \
             --info-type tail
           sleep 10
-          TAIL_LOG_URL=$(aws elasticbeanstalk retrieve-environment-info \
+          LOG_URL=$(aws elasticbeanstalk retrieve-environment-info \
             --region ap-southeast-2 \
             --environment-name devapi-env \
             --info-type tail --query 'EnvironmentInfo[].Message' --output text)
-          echo "Fetching tail logs from: $TAIL_LOG_URL"
-          curl -s "$TAIL_LOG_URL" > eb-logs.txt || echo "Failed to fetch tail logs"
-          aws s3 cp s3://${{ secrets.S3_BUCKET_NAME }}/resources/environments/logs/publish/e-2hb2mtzzpt/eb-activity.log eb-activity.log --region ap-southeast-2 || echo "Failed to retrieve eb-activity.log"
-          echo "Tail logs:"
-          cat eb-logs.txt
-          echo "eb-activity.log:"
-          cat eb-activity.log || echo "eb-activity.log is empty or not retrieved"
+          curl -s "$LOG_URL" || echo "Log download failed"
 
       - name: Save last deployed commit SHA
-        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.check-changes.outputs.has-changes == 'true')
+        if: always() && (github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true')
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           echo "${{ github.sha }}" > last-deployed-commit.txt
-          aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to save last deployed commit SHA"
+          aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to update commit SHA"
