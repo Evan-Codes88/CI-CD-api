@@ -88,13 +88,13 @@ graph TD
     X -->|Failure| Y[Notify Team via Slack]
     E -->|New Commits| P
     E -->|No New Commits| Z[Skip Deployment, Notify via Slack]
-    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px;
-    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px;
+    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px,color:#000000;
+    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px,color:#000000;
     class B,F,G,H,I,J,K,L,M,N ci;
     class O,P,Q,R,S,T,U,V,W,X,Y,Z deploy;
 ```
 
-This diagram illustrates the RentSync CI/CD pipeline, with **blue** for CI (`ci.yml`) and **green** for deployment (`deploy.yml`), showing triggers, conditional logic, retries, and notifications.
+This diagram illustrates the RentSync CI/CD pipeline, with **blue** for CI (`ci.yml`) and **green** for deployment (`deploy.yml`), showing triggers, conditional logic, retries, and notifications. All text is black for clarity.
 
 ## Real-World Examples
 
@@ -284,7 +284,7 @@ RentSync’s CI/CD pipeline integrates multiple services and technologies to aut
 
 ### AWS IAM
 
-- **purpose**: Secures access to AWS resources.
+- **Purpose**: Secures access to AWS resources.
 - **Functionalities**:
   - Defines policies for S3 and Elastic Beanstalk.
   - Authenticates GitHub Actions via credentials.
@@ -428,8 +428,8 @@ graph TD
     J --> L[Slack Notifications]
     F --> M[S3: Test Logs]
     J --> N[S3: Application & Commit SHA]
-    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px;
-    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px;
+    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px,color:#000000;
+    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px,color:#000000;
     class C,D,E,F,G ci;
     class H,I,J,K,L,M,N deploy;
 ```
@@ -452,8 +452,8 @@ graph TD
     K --> M[Save Last Deployed Commit SHA]
     M --> N[S3: last-deployed-commit.txt]
     K --> O[Slack Notification]
-    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px;
-    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px;
+    classDef ci fill:#ADD8E6,stroke:#333,stroke-width:2px,color:#000000;
+    classDef deploy fill:#90EE90,stroke:#333,stroke-width:2px,color:#000000;
     class B,C,D,E,F,G,H ci;
     class I,J,K,L,M,N,O deploy;
 ```
