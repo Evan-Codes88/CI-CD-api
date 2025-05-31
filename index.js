@@ -12,23 +12,19 @@ import ratingRoutes from './routes/ratingRoutes.js';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 8080; // Use 8080 for Elastic Beanstalk
+const port = process.env.PORT || 8080;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
-// Health check endpoint
 app.get('/healthcheck', (req, res) => res.status(200).send('OK'));
 
-// Routes
 app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/inspections', inspectionRoutes);
 app.use('/api/ratings', ratingRoutes);
 
-// Only connect to MongoDB and start server if NOT in test environment
 if (process.env.NODE_ENV !== 'test') {
   connectDB().catch((err) => {
     console.error('Failed to connect to MongoDB:', err);
@@ -43,5 +39,4 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-// Export app for tests
 export default app;
