@@ -43,7 +43,7 @@ In RentSync, error handling is implemented in `ci.yml` (e.g., test retries, S3 u
 ## Components of an Automation Workflow
 
 | Component      | Description                                       | RentSync Example                                                            |
-| -------------- | ------------------------------------------------- | --------------------------------------------------------------------------- | --- | ---------------------------------- |
+| -------------- | ------------------------------------------------- | --------------------------------------------------------------------------- |
 | Trigger        | Event that starts the workflow                    | Push/pull request to `main`, daily schedule at midnight AEST (`0 14 * * *`) |
 | Input          | Data received at the start                        | Commit SHA (`${{ github.sha }}`), code changes, test configurations         |
 | Steps          | Individual tasks or operations                    | Run Jest tests, create `application.zip`, upload to S3                      |
@@ -52,7 +52,7 @@ In RentSync, error handling is implemented in `ci.yml` (e.g., test retries, S3 u
 | Loops          | Repeat actions for multiple items or retries      | Retry failed tests or deployments up to 2 times                             |
 | Outputs        | Final results, notifications, or reports          | Test artifacts, S3 logs, deployed application in Elastic Beanstalk          |
 | Integrations   | Connections to external systems (APIs, databases) | GitHub API, AWS S3, Elastic Beanstalk, MongoDB                              |
-| Error Handlers | Mechanisms to recover or alert on errors          | Retry logic, `                                                              |     | echo` clauses, Slack notifications |
+| Error Handlers | Mechanisms to recover or alert on errors          | Retry logic, `echo` clauses, Slack notifications                            |
 
 ## Example Automation Workflow Diagram
 
