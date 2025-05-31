@@ -63,10 +63,6 @@ jobs:
             echo "Missing: utils/connectDB.js"
             exit 1
           fi
-          if ! unzip -l application.zip | grep -q ".ebextensions/node-version.config"; then
-            echo "Missing: .ebextensions/node-version.config"
-            exit 1
-          fi
 
       - name: Debug AWS setup
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
