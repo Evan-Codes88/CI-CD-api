@@ -1,63 +1,45 @@
-# Workflow name for Continuous Integration
 name: CI
 
-# Events that trigger the workflow
 on:
-  # Trigger on push to the main branch
   push:
     branches: [main]
-  # Trigger on pull requests targeting the main branch
   pull_request:
     branches: [main]
-  # Enable this workflow to be called by other workflows (e.g., deploy.yml)
   workflow_call:
 
-# Defines the jobs to be executed
 jobs:
-  # Job: Run tests and generate test artifacts
   test:
-    # Use the latest Ubuntu runner for compatibility
     runs-on: ubuntu-latest
-    steps:
-      # Step 1: Check out the repository code
-      - uses: actions/checkout@v4
-        # Clones the repository to access source code for testing
 
-      # Step 2: Set up Node.js environment
+    # Declare all secret env vars once here
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Use Node.js
-        # Use the setup-node action to configure Node.js
         uses: actions/setup-node@v4
         with:
-          # Specify Node.js version 18 for compatibility with the application
           node-version: "18"
 
-      # Step 3: Install project dependencies
       - name: Install dependencies
-        # Run npm install to fetch dependencies listed in package.json
         run: npm install
 
-      # Step 4: Debug Jest setup to verify installation
       - name: Debug Jest setup
         run: |
-          # Check Jest version to ensure it's installed
           npx jest --version || echo "Jest not found"
-          # List Jest in installed dependencies to verify setup
           npm ls jest || echo "Jest not installed"
 
-      # Step 5: Run tests and generate JSON output
       - name: Run tests and generate JSON output
-        # Run Jest tests in CI mode and output results to test-results.json
         run: npx jest --ci --json > test-results.json || echo "Tests failed, but continuing"
-        env:
-          # MongoDB connection string from GitHub Secrets for test database
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          # JWT secret for API authentication during tests
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        # Continue on failure to ensure subsequent steps execute
+        # No need to redefine env here, inherited from job env
 
-      # Step 6: Create custom test log and export data
       - name: Create custom test log and export data
-        # Run regardless of previous step outcomes to ensure logs are generated
         if: always()
         run: |
           node -e "
@@ -82,65 +64,32 @@ jobs:
               log.push('Error parsing test-results.json: ' + e.message);
               summary.error = e.message;
             }
-            // Write test summary to a custom log file
             fs.writeFileSync('test-results-custom.log', log.join('\n'));
-            // Write structured test summary to JSON for reuse
             fs.writeFileSync('test-summary.json', JSON.stringify(summary, null, 2));
           "
-        # Parses test-results.json to create a custom log and structured JSON output
 
-      # Step 7: Debug AWS setup
       - name: Debug AWS setup
-        # Run regardless of previous step outcomes to ensure connectivity checks
         if: always()
-        env:
-          # AWS credentials for S3 access
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Verify AWS CLI version
           aws --version
-          # List S3 test-logs directory to ensure connectivity
-          aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/test-logs/ --region ap-southeast-2 || echo "Failed to list S3 test-logs"
+          aws s3 ls s3://${S3_BUCKET_NAME}/test-logs/ --region ap-southeast-2 || echo "Failed to list S3 test-logs"
 
-      # Step 8: Upload test log to S3
       - name: Upload test log to S3
-        # Run regardless of previous step outcomes to ensure logs are stored
         if: always()
-        env:
-          # AWS credentials for S3 access
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Upload custom test log to S3 with a commit-specific filename
-          aws s3 cp test-results-custom.log s3://${{ secrets.S3_BUCKET_NAME }}/test-logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to S3"
-        # Continue on failure to ensure subsequent steps execute
+          aws s3 cp test-results-custom.log s3://${S3_BUCKET_NAME}/test-logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to S3"
 
-      # Step 9: Upload test log to Elastic Beanstalk logs
       - name: Upload test log to Elastic Beanstalk logs
-        # Run regardless of previous step outcomes to ensure logs are stored
         if: always()
-        env:
-          # AWS credentials for S3 access
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          # Upload custom test log to Elastic Beanstalk's log directory in S3
-          aws s3 cp test-results-custom.log s3://${{ secrets.S3_BUCKET_NAME }}/DEV-API/DEVAPI-env/logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to Elastic Beanstalk logs"
-        # Continue on failure to ensure subsequent steps execute
+          aws s3 cp test-results-custom.log s3://${S3_BUCKET_NAME}/DEV-API/DEVAPI-env/logs/test-results-${{ github.sha }}.log --region ap-southeast-2 || echo "Failed to upload to Elastic Beanstalk logs"
 
-      # Step 10: Archive test results
       - name: Archive test results
-        # Run regardless of previous step outcomes to ensure artifacts are available
         if: always()
-        # Use the upload-artifact action to archive test results
         uses: actions/upload-artifact@v4
         with:
-          # Name of the artifact bundle in the GitHub Actions tab
           name: test-results
-          # Files to include in the artifact bundle
           path: |
             test-results.json
             test-results-custom.log
             test-summary.json
-        # Archives test results as downloadable artifacts for review

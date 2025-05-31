@@ -14,15 +14,17 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Check for new commits (Scheduled Only)
         if: github.event_name == 'schedule'
         id: check-changes
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LATEST_COMMIT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             https://api.github.com/repos/${{ github.repository }}/commits/main | jq -r '.sha')
@@ -65,9 +67,6 @@ jobs:
 
       - name: Debug AWS setup
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws --version
           aws s3 ls s3://${{ secrets.S3_BUCKET_NAME }}/ --region ap-southeast-2 || echo "S3 list failed"
@@ -75,9 +74,6 @@ jobs:
 
       - name: Upload and Deploy to Elastic Beanstalk
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp application.zip s3://${{ secrets.S3_BUCKET_NAME }}/application-${{ github.sha }}.zip --region ap-southeast-2
           aws elasticbeanstalk create-application-version \
@@ -93,9 +89,6 @@ jobs:
       - name: Verify environment health
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
         id: verify-health
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           sleep 120
           HEALTH=$(aws elasticbeanstalk describe-environment-health \
@@ -108,9 +101,6 @@ jobs:
 
       - name: Verify environment variables
         if: github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           VARS=$(aws elasticbeanstalk describe-configuration-settings \
             --region ap-southeast-2 \
@@ -122,9 +112,6 @@ jobs:
 
       - name: Retrieve logs on failure
         if: failure() && (github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true')
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws elasticbeanstalk request-environment-info \
             --region ap-southeast-2 \
@@ -139,9 +126,6 @@ jobs:
 
       - name: Save last deployed commit SHA
         if: always() && (github.event_name != 'schedule' || steps.check-changes.outputs.has-changes == 'true')
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           echo "${{ github.sha }}" > last-deployed-commit.txt
           aws s3 cp last-deployed-commit.txt s3://${{ secrets.S3_BUCKET_NAME }}/last-deployed-commit.txt --region ap-southeast-2 || echo "Failed to update commit SHA"
