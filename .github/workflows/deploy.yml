@@ -22,18 +22,12 @@ jobs:
     needs: test
     # Use the latest Ubuntu runner for compatibility
     runs-on: ubuntu-latest
-    # Only proceed if triggered by push or if new commits are detected on schedule
-    if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
     steps:
-      # Step 1: Check out the repository code
-      - uses: actions/checkout@v4
-        # Clones the repository to access source code for deployment
-
-      # Step 2: Check for new commits (only for schedule trigger)
+      # Step 1: Check for new commits (for schedule trigger)
       - name: Check for new commits
         # Run only if triggered by schedule to avoid redundant deployments
         if: github.event_name == 'schedule'
-        # Assign an ID to reference the output in the job condition
+        # Assign an ID to reference the output in subsequent steps
         id: check-changes
         env:
           # AWS credentials for S3 access
@@ -55,15 +49,23 @@ jobs:
             # Set to empty if no previous deploy exists (e.g., first deployment)
             LAST_DEPLOYED_COMMIT=""
           fi
-          # Compare commits and set output for job condition
+          # Compare commits and set output for subsequent steps
           if [ "$LATEST_COMMIT" != "$LAST_DEPLOYED_COMMIT" ]; then
             echo "has-changes=true" >> $GITHUB_OUTPUT
           else
             echo "has-changes=false" >> $GITHUB_OUTPUT
           fi
 
+      # Step 2: Check out the repository code
+      - uses: actions/checkout@v4
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
+        # Clones the repository to access source code for deployment
+
       # Step 3: Set up Node.js environment
       - name: Use Node.js
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         # Use the setup-node action to configure Node.js
         uses: actions/setup-node@v4
         with:
@@ -72,18 +74,24 @@ jobs:
 
       # Step 4: Install project dependencies
       - name: Install dependencies
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         # Run npm install to fetch dependencies from package.json
         run: npm install || echo "Install dependencies failed, but continuing"
         # Continue on failure to ensure subsequent steps execute
 
       # Step 5: Create deployment package
       - name: Create deployment package
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         # Create a zip archive including source code, entry point, dependencies, and EB config
         run: zip -r application.zip src index.js package.json package-lock.json .ebextensions || echo "Create deployment package failed, but continuing"
         # Continue on failure to ensure subsequent steps execute
 
       # Step 6: Debug AWS setup
       - name: Debug AWS setup
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         env:
           # AWS credentials for S3 and Elastic Beanstalk access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -98,6 +106,8 @@ jobs:
 
       # Step 7: Deploy to Elastic Beanstalk
       - name: Deploy to Elastic Beanstalk
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         env:
           # AWS credentials for S3 and Elastic Beanstalk access
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -119,6 +129,8 @@ jobs:
 
       # Step 8: Save last deployed commit SHA
       - name: Save last deployed commit SHA
+        # Only run for push or if new commits are detected
+        if: github.event_name == 'push' || steps.check-changes.outputs.has-changes == 'true'
         # Run regardless of previous step outcomes to maintain state consistency
         if: always()
         env:
